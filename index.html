@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <title>ระบบโทรมาตร ลุ่มน้ำนครศรีธรรมราช</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -105,34 +105,6 @@
         }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     </style>
-     <script>
-        (async function() {
-            // ดึงเนื้อหาจากเว็บเดิม
-            const response = await fetch('https://72media.github.io/DWR_RID/');
-            const html = await response.text();
-            document.open();
-            document.write(html);
-            document.close();
-
-            // หลังจากโหลด DOM แล้ว ให้แก้ไขรูปภาพ http -> https ผ่าน proxy
-            function convertHttpUrl(url) {
-                if (url && url.startsWith('http://')) {
-                    return 'https://images.weserv.nl/?url=' + encodeURIComponent(url);
-                }
-                return url;
-            }
-            function fixImages() {
-                document.querySelectorAll('img').forEach(img => {
-                    let src = img.getAttribute('src');
-                    if (src && src.startsWith('http://')) {
-                        img.src = convertHttpUrl(src);
-                    }
-                });
-            }
-            new MutationObserver(fixImages).observe(document.body, { childList: true, subtree: true });
-            fixImages();
-        })();
-    </script>
 </head>
 <body class="min-h-screen flex flex-col">
 
