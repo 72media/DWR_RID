@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบโทรมาตร ลุ่มน้ำนครศรีธรรมราช</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -241,7 +241,17 @@
         let map, currentStation = null, sidebarOpen = true, weatherCache = {};
         let currentLayout = 3;
 
-        const getImageUrl = s => `${s.img}?t=${Date.now()}`;
+        const PROXY = "https://corsproxy.io/?";
+
+const getImageUrl = s => {
+    let url = s.img;
+
+    if (url.startsWith("http://")) {
+        url = PROXY + url;
+    }
+
+    return `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+};
 
         async function getWeatherData(lat, lng) {
             const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
