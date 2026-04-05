@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap');
         
@@ -23,6 +22,18 @@
         .glass { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(148, 163, 184, 0.2); }
 
         .map-container { border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6); }
+
+        .leaflet-popup-content-wrapper {
+            background: rgba(15, 23, 42, 0.98) !important;
+            backdrop-filter: blur(20px) !important;
+            border: 1px solid rgba(148, 163, 184, 0.3) !important;
+            border-radius: 20px !important;
+            box-shadow: 0 25px 70px -15px rgba(0, 0, 0, 0.75) !important;
+        }
+
+        .leaflet-popup-tip {
+            background: rgba(15, 23, 42, 0.98) !important;
+        }
 
         .multiview-grid {
             display: grid;
@@ -54,7 +65,6 @@
 
         .active-layer { background: #0ea5e9; color: white; }
 
-        /* Fullscreen Image - เวอร์ชันที่แก้ไขให้ภาพพอดีและเห็นปุ่มปิด */
         .fullscreen-overlay {
             position: fixed;
             inset: 0;
@@ -98,31 +108,22 @@
             transform: scale(1.15);
             border-color: white;
         }
-
-        .leaflet-popup-content-wrapper {
-            background: rgba(15, 23, 42, 0.97) !important;
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(148, 163, 184, 0.4) !important;
-            border-radius: 18px !important;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7) !important;
-        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
 
-    <!-- HEADER -->
     <header class="glass border-b border-slate-700 px-6 py-3 flex items-center justify-between z-50">
         <div class="flex items-center gap-4">
             <div class="w-11 h-11 bg-gradient-to-br from-cyan-400 to-sky-600 rounded-2xl flex items-center justify-center">
                 <img src="https://i.ibb.co/4nSt8YfF/security-camera-64.png" class="w-7 h-7">
             </div>
             <div>
-                <h1 class="text-2xl font-bold">ระบบโทรมาตร</h1>
+                <h1 class="text-2xl font-bold">ระบบโทรมาตร DWR+RID</h1>
                 <p class="text-sky-400 text-sm">ลุ่มน้ำนครศรีธรรมราช</p>
             </div>
         </div>
 
-        <div id="thai-time" class="glass px-8 py-2 rounded-3xl text-center min-w-[360px]"></div>
+        <div id="thai-time" class="glass px-8 py-2 rounded-3xl text-center min-w-[300px]"></div>
 
         <div class="flex items-center gap-3">
             <div class="flex bg-slate-800 rounded-3xl p-1 text-sm font-medium">
@@ -140,21 +141,18 @@
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-        <!-- Sidebar -->
-        <div id="sidebar" class="w-72 glass border-r border-slate-700 flex flex-col transition-all duration-300">
+        <div id="sidebar" class="w-72 glass border-r border-slate-700 flex flex-col transition-all duration-300 flex-shrink-0">
             <div class="p-5 border-b border-slate-600">
                 <h2 class="font-semibold text-lg">📍 รายชื่อสถานี</h2>
             </div>
             <div id="station-list" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
         </div>
 
-        <!-- Map -->
-        <div class="flex-1 p-6">
+        <div class="flex-1 p-6 relative">
             <div id="map" class="map-container w-full h-full"></div>
         </div>
     </div>
 
-    <!-- MULTIVIEW MODAL -->
     <div id="multiview-modal" class="hidden fixed inset-0 bg-black/95 z-[12000] flex items-center justify-center p-6">
         <div class="glass w-full h-full max-w-[98%] max-h-[95vh] rounded-3xl overflow-hidden border border-slate-600 flex flex-col">
             <div class="px-8 py-4 border-b border-slate-600 flex items-center justify-between bg-slate-950/70">
@@ -175,7 +173,6 @@
         </div>
     </div>
 
-    <!-- Single Image Modal -->
     <div id="image-modal" class="hidden fixed inset-0 bg-black/95 z-[13000] flex items-center justify-center p-6">
         <div class="modal glass max-w-5xl w-full rounded-3xl overflow-hidden">
             <div class="px-8 py-5 border-b border-slate-600 flex justify-between">
@@ -212,46 +209,11 @@
             { code: "TC191918", name: "สะพานตลาดเชียรใหญ่", lat: 8.17389, lng: 100.14914, img: "https://tele-nakhonsri.dwr.go.th/image/TC191918/CCTV_image/Staff_1.jpg" }
         ];
 
-        let map, weatherCache = {};
-
-        async function getWeatherData(lat, lng) {
-            const cacheKey = `${lat.toFixed(2)},${lng.toFixed(2)}`;
-            if (weatherCache[cacheKey]) return weatherCache[cacheKey];
-            try {
-                const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,precipitation&timezone=auto`);
-                const data = await response.json();
-                weatherCache[cacheKey] = data.current;
-                return data.current;
-            } catch (error) {
-                console.error('Weather API error:', error);
-                return null;
-            }
-        }
-
-        function getWeatherDescription(code) {
-            const weatherCodes = {
-                0: { emoji: '☀️', text: 'ท้องฟ้าแจ่มใส' },
-                1: { emoji: '🌤️', text: 'ส่วนใหญ่แจ่มใส' },
-                2: { emoji: '⛅', text: 'มีเมฆบางส่วน' },
-                3: { emoji: '☁️', text: 'มีเมฆมาก' },
-                45: { emoji: '🌫️', text: 'หมอก' },
-                51: { emoji: '🌧️', text: 'ฝนเบา' },
-                53: { emoji: '🌧️', text: 'ฝนปานกลาง' },
-                55: { emoji: '🌧️', text: 'ฝนหนัก' },
-                61: { emoji: '🌧️', text: 'ฝนเบา' },
-                63: { emoji: '🌧️', text: 'ฝนปานกลาง' },
-                65: { emoji: '🌧️', text: 'ฝนหนัก' },
-                80: { emoji: '🌧️', text: 'ฝนหลวก' },
-                95: { emoji: '⛈️', text: 'พายุฟ้าคะนอง' }
-            };
-            return weatherCodes[code] || { emoji: '❓', text: 'ไม่ทราบ' };
-        }
+        let map, weatherCache = {}, currentPopup = null;
 
         function getImageUrl(station) {
             let url = station.img;
-            if (url.startsWith('http://')) {
-                url = `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
-            }
+            if (url.startsWith('http://')) url = `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
             return `${url}?t=${Date.now()}`;
         }
 
@@ -270,19 +232,7 @@
                         </div>
                     </div>
                 `;
-                div.onclick = () => {
-                    map.flyTo([station.lat, station.lng], 16.5);
-                    map.once('moveend', () => {
-                        map.eachLayer(layer => {
-                            if (layer instanceof L.Marker) {
-                                const latlng = layer.getLatLng();
-                                if (Math.abs(latlng.lat - station.lat) < 0.0005 && Math.abs(latlng.lng - station.lng) < 0.0005) {
-                                    layer.openPopup();
-                                }
-                            }
-                        });
-                    });
-                };
+                div.onclick = () => map.flyTo([station.lat, station.lng], 16.5);
                 container.appendChild(div);
             });
         }
@@ -299,16 +249,113 @@
             `;
         }
 
+        async function getWeatherData(lat, lng) {
+            const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+            if (weatherCache[key]) return weatherCache[key];
+            try {
+                const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,precipitation&timezone=auto`);
+                const data = await res.json();
+                weatherCache[key] = data.current;
+                return data.current;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function getWeatherHTML(weather) {
+            if (!weather) return `<div class="text-slate-400 text-center py-8">⚠️ ไม่สามารถโหลดสภาพอากาศได้</div>`;
+
+            const temp = weather.temperature_2m.toFixed(1);
+            const tempColor = temp > 32 ? '#f87171' : temp > 28 ? '#fb923c' : temp > 22 ? '#fcd34d' : '#67e8f9';
+
+            // ส่วนที่แก้ไข: เพิ่มขนาดตัวเลข (text-lg) และสีที่ชัดเจนขึ้น
+            return `
+                <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 border border-slate-700">
+                    <div class="flex items-center gap-3 mb-5">
+                        <div class="text-4xl">🌡️</div>
+                        <div>
+                            <div class="text-xs text-slate-400 uppercase tracking-wider mb-0.5">อุณหภูมิปัจจุบัน</div>
+                            <div class="text-3xl font-bold" style="color:${tempColor}">${temp}°C</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="bg-slate-950/40 rounded-xl p-2 border border-slate-700/50">
+                            <div class="text-emerald-400 text-lg mb-1">💨</div>
+                            <div class="text-[10px] text-slate-400 mb-1">ลม (km/h)</div>
+                            <div class="text-lg font-bold text-white">${weather.wind_speed_10m.toFixed(1)}</div>
+                        </div>
+                        <div class="bg-slate-950/40 rounded-xl p-2 border border-slate-700/50">
+                            <div class="text-sky-400 text-lg mb-1">💧</div>
+                            <div class="text-[10px] text-slate-400 mb-1">ชื้น (%)</div>
+                            <div class="text-lg font-bold text-white">${weather.relative_humidity_2m}</div>
+                        </div>
+                        <div class="bg-slate-950/40 rounded-xl p-2 border border-slate-700/50">
+                            <div class="text-blue-400 text-lg mb-1">🌧️</div>
+                            <div class="text-[10px] text-slate-400 mb-1">ฝน (mm)</div>
+                            <div class="text-lg font-bold text-white">${(weather.precipitation || 0).toFixed(1)}</div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function showStationPopup(station, latlng) {
+            if (currentPopup) map.closePopup(currentPopup);
+
+            const popupContent = `
+                <div class="p-6 max-w-[340px]">
+                    <div class="flex items-center gap-4 mb-6">
+                        <div class="w-14 h-14 bg-gradient-to-br from-sky-400 to-blue-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-inner">
+                            <img src="https://i.ibb.co/4nSt8YfF/security-camera-64.png" class="w-8 h-8">
+                        </div>
+                        <div class="flex-1">
+                            <div class="font-mono text-xl font-bold text-sky-300">${station.code}</div>
+                            <div class="text-lg font-semibold text-white leading-tight">${station.name}</div>
+                            <div class="text-xs text-slate-400 mt-1">${station.lat.toFixed(4)}, ${station.lng.toFixed(4)}</div>
+                        </div>
+                    </div>
+
+                    <div id="weather-container" class="mb-6">
+                        <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 border border-slate-700 text-center">
+                            <div class="flex justify-center mb-3">
+                                <div class="w-6 h-6 border-4 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                            <div class="text-slate-400 text-sm">กำลังโหลดสภาพอากาศ...</div>
+                        </div>
+                    </div>
+
+                    <button onclick="openImageModal({code: '${station.code}', name: '${station.name}', lat: ${station.lat}, lng: ${station.lng}, img: '${station.img}'})" 
+                            class="w-full py-4 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-semibold rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
+                        📺 ดูภาพสดจากสถานี
+                    </button>
+                </div>
+            `;
+
+            currentPopup = L.popup({
+                maxWidth: 380,
+                className: 'custom-popup',
+                closeButton: true
+            })
+            .setLatLng(latlng)
+            .setContent(popupContent)
+            .openOn(map);
+
+            getWeatherData(station.lat, station.lng).then(weather => {
+                const container = document.getElementById('weather-container');
+                if (container) container.outerHTML = getWeatherHTML(weather);
+            });
+        }
+
         function initMap() {
-            map = L.map('map', { zoomControl: true, attributionControl: false }).setView([8.5, 99.9], 10);
-            
+            map = L.map('map', { 
+                zoomControl: true, 
+                attributionControl: false,
+                closePopupOnClick: true 
+            }).setView([8.5, 99.9], 10);
+
             L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
                 subdomains: ['mt0','mt1','mt2','mt3'],
                 maxZoom: 19
             }).addTo(map);
-
-            document.getElementById('btn-hybrid').classList.add('active-layer');
-            document.getElementById('btn-osm').classList.remove('active-layer');
 
             const icon = L.icon({ 
                 iconUrl: 'https://i.ibb.co/4nSt8YfF/security-camera-64.png', 
@@ -318,70 +365,9 @@
 
             stations.forEach(station => {
                 const marker = L.marker([station.lat, station.lng], { icon }).addTo(map);
-
-                getWeatherData(station.lat, station.lng).then(weather => {
-                    let weatherHtml = `
-                        <div style="background: linear-gradient(135deg, rgba(15,23,42,0.95), rgba(7,14,28,0.9)); border-radius: 14px; padding: 16px; margin-bottom: 14px; border: 1px solid rgba(59,130,246,0.4);">
-                            <div style="color: #bae6fd; font-size: 15px; font-weight: 700; margin-bottom: 12px;">🌡️ สภาพอากาศ</div>
-                    `;
-
-                    if (weather) {
-                        const desc = getWeatherDescription(weather.weather_code);
-                        const temp = weather.temperature_2m.toFixed(1);
-                        const humidity = weather.relative_humidity_2m;
-                        const wind = weather.wind_speed_10m.toFixed(1);
-                        const rain = weather.precipitation ? weather.precipitation.toFixed(1) : '0';
-
-                        const tempColor = temp > 30 ? '#f87171' : temp > 25 ? '#fb923c' : temp > 20 ? '#fcd34d' : '#4ade80';
-
-                        weatherHtml += `
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                                <div style="background: rgba(30,58,138,0.5); border-radius: 12px; padding: 12px; border-left: 5px solid ${tempColor};">
-                                    <div style="color:#e0f2fe; font-size: 13px;">🌡️ อุณหภูมิ</div>
-                                    <div style="color:${tempColor}; font-size: 19px; font-weight: bold;">${temp}°C</div>
-                                </div>
-                                <div style="background: rgba(30,58,138,0.5); border-radius: 12px; padding: 12px; border-left: 5px solid #60a5fa;">
-                                    <div style="color:#e0f2fe; font-size: 13px;">💨 ลม</div>
-                                    <div style="color:#bae6fd; font-size: 19px; font-weight: bold;">${wind} km/h</div>
-                                </div>
-                                <div style="background: rgba(30,58,138,0.5); border-radius: 12px; padding: 12px; border-left: 5px solid #22d3ee;">
-                                    <div style="color:#e0f2fe; font-size: 13px;">💧 ความชื้น</div>
-                                    <div style="display: flex; align-items: center; gap: 10px;">
-                                        <span style="color:#67e8f9; font-size: 19px; font-weight: bold;">${humidity}%</span>
-                                        <div style="flex: 1; height: 8px; background: rgba(103,232,249,0.2); border-radius: 9999px; overflow: hidden;">
-                                            <div style="height: 100%; width: ${humidity}%; background: linear-gradient(to right, #67e8f9, #22d3ee);"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div style="background: rgba(30,58,138,0.5); border-radius: 12px; padding: 12px; border-left: 5px solid #60a5fa;">
-                                    <div style="color:#e0f2fe; font-size: 13px;">🌧️ ปริมาณน้ำฝน</div>
-                                    <div style="color:#bae6fd; font-size: 19px; font-weight: bold;">${rain} mm</div>
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        weatherHtml += `<div style="color:#cbd5e1; text-align:center; padding: 16px; font-size: 14px;">⚠️ ไม่สามารถดึงข้อมูลสภาพอากาศได้</div>`;
-                    }
-                    weatherHtml += `</div>`;
-
-                    const popupContent = `
-                        <div style="padding: 8px 4px;">
-                            <div style="text-align: center; margin-bottom: 16px;">
-                                <div style="font-family: monospace; color: #67e8f9; font-size: 18px; font-weight: bold;">${station.code}</div>
-                                <div style="font-size: 17px; font-weight: 600; color: #f1f5f9; margin-top: 4px;">${station.name}</div>
-                                <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">${station.lat.toFixed(5)}, ${station.lng.toFixed(5)}</div>
-                            </div>
-                            ${weatherHtml}
-                            <button onclick="openImageModal({code: '${station.code}', name: '${station.name}', lat: ${station.lat}, lng: ${station.lng}, img: '${station.img}'})" 
-                                    style="width: 100%; padding: 14px; background: linear-gradient(to right, #0ea5e9, #3b82f6); color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px;">
-                                📺 ดูภาพสด
-                            </button>
-                        </div>
-                    `;
-                    marker.bindPopup(popupContent, { maxWidth: 360 });
+                marker.on('click', (e) => {
+                    showStationPopup(station, e.latlng);
                 });
-
-                marker.on('click', () => marker.openPopup());
             });
         }
 
@@ -403,14 +389,16 @@
         function openImageModal(station) {
             document.getElementById('modal-code').textContent = station.code;
             document.getElementById('modal-name').textContent = station.name;
-            document.getElementById('image-modal').classList.remove('hidden');
-            document.getElementById('image-modal').classList.add('flex');
+            const modal = document.getElementById('image-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
             document.getElementById('modal-image').src = getImageUrl(station);
         }
 
         function closeModal() {
-            document.getElementById('image-modal').classList.add('hidden');
-            document.getElementById('image-modal').classList.remove('flex');
+            const modal = document.getElementById('image-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
         }
 
         function toggleFullscreenImage() {
@@ -418,27 +406,15 @@
             const overlay = document.createElement('div');
             overlay.className = 'fullscreen-overlay';
             overlay.id = 'fullscreen-overlay';
-            
-            overlay.innerHTML = `
-                <img src="${src}" alt="Fullscreen Image">
-                <button class="fullscreen-close" onclick="exitFullscreenImage()">×</button>
-            `;
-            
+            overlay.innerHTML = `<img src="${src}" alt="Fullscreen"><button class="fullscreen-close" onclick="exitFullscreenImage()">×</button>`;
             document.body.appendChild(overlay);
-            
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) exitFullscreenImage();
-            });
+            overlay.onclick = (e) => { if (e.target === overlay) exitFullscreenImage(); };
         }
 
         function exitFullscreenImage() {
             const overlay = document.getElementById('fullscreen-overlay');
             if (overlay) overlay.remove();
         }
-
-        document.addEventListener('keydown', e => {
-            if (e.key === 'Escape') exitFullscreenImage();
-        });
 
         function toggleMultiview() {
             const modal = document.getElementById('multiview-modal');
@@ -456,8 +432,7 @@
                 div.className = 'camera-frame';
                 if (station) {
                     div.innerHTML = `
-                        <div class="drag-handle" title="ลากเพื่อจัดเรียง">⋮⋮</div>
-                        <div class="p-1.5 border-b border-slate-700 bg-slate-950 flex-shrink-0">
+                        <div class="p-1.5 border-b border-slate-700 bg-slate-950">
                             <div class="flex items-center gap-1 mb-0.5">
                                 <img src="https://i.ibb.co/4nSt8YfF/security-camera-64.png" class="w-3 h-3">
                                 <span class="font-mono text-xs text-sky-400">${station.code}</span>
@@ -467,13 +442,11 @@
                         <div class="relative flex-1 bg-slate-900 overflow-hidden">
                             <img src="${getImageUrl(station)}" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/800x450/1f2937/64748b?text=โหลดไม่ได้'">
                             <div class="absolute top-1 right-1 bg-red-600 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-1 shadow">
-                                <div class="w-1 h-1 bg-white rounded-full live-dot"></div> LIVE
+                                <div class="w-1 h-1 bg-white rounded-full live-dot animate-pulse"></div> LIVE
                             </div>
                         </div>
                     `;
-                    div.onclick = () => { toggleMultiview(); setTimeout(() => openImageModal(station), 300); };
-                } else {
-                    div.innerHTML = `<div class="w-full h-full flex items-center justify-center text-slate-600 bg-slate-900">ช่องว่าง</div>`;
+                    div.onclick = () => { toggleMultiview(); setTimeout(() => openImageModal(station), 200); };
                 }
                 container.appendChild(div);
             }
@@ -482,10 +455,16 @@
 
         function refreshMultiview() { renderMultiview(); }
 
+        let sidebarTimeout = null;
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
-            const isOpen = sidebar.style.width !== '0px';
-            sidebar.style.width = isOpen ? '0px' : '288px';
+            const collapsed = sidebar.style.width === '0px' || !sidebar.style.width;
+            sidebar.style.width = collapsed ? '288px' : '0px';
+
+            if (sidebarTimeout) clearTimeout(sidebarTimeout);
+            sidebarTimeout = setTimeout(() => {
+                if (map) L.Util.requestAnimFrame(() => map.invalidateSize(true));
+            }, 280);
         }
 
         window.onload = () => {
@@ -494,6 +473,14 @@
             updateThaiTime();
             setInterval(updateThaiTime, 1000);
         };
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                exitFullscreenImage();
+                closeModal();
+                if (currentPopup) map.closePopup(currentPopup);
+            }
+        });
     </script>
 </body>
 </html>
